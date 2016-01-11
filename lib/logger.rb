@@ -16,9 +16,9 @@ require 'monitor'
 # == Description
 #
 # The Logger class provides a simple but sophisticated logging utility that
-# you can use to output messages.  
+# you can use to output messages.
 #
-# The messages have associated 
+# The messages have associated
 # levels, such as +INFO+ or +ERROR+ that indicate their importance.
 # You can then give the Logger a level, and only messages at that
 # level of higher will be printed.
@@ -142,7 +142,7 @@ require 'monitor'
 # 4. With severity.
 #
 #      logger.add(Logger::FATAL) { 'Fatal error!' }
-# 
+#
 # The block form allows you to create potentially complex log messages,
 # but to delay their evaluation until and unless the message is
 # logged.  For example, if we have the following:
@@ -205,7 +205,7 @@ class Logger
   end
   # not used after 1.2.7. just for compat.
   class ShiftingError < Error # :nodoc:
-  end 
+  end
 
   # Logging severity.
   module Severity
@@ -606,27 +606,33 @@ private
 
     def check_shift_log
       if @shift_age.is_a?(Integer)
-        # Note: always returns false if '0'.
         if @filename && (@shift_age > 0) && (@dev.stat.size > @shift_size)
-          shift_log_age
+          shift_log_age(@shift_age)
         end
       else
+        #this menas that shift_age is an string expresing time, daily, weekly or monthly
         now = Time.now
         period_end = previous_period_end(now)
-        if @dev.stat.mtime <= period_end
+        # first we check that size is not bigger than limit
+        if @filename && (@dev.stat.size > @shift_size)
+          #we can set by default that if we want shift log period the age may have a max of 10.
+          shift_log_age(10)
+        elsif @dev.stat.mtime <= period_end
+          @dev.write("shifting by period of time\n")
           shift_log_period(period_end)
         end
       end
     end
 
-    def shift_log_age
-      (@shift_age-3).downto(0) do |i|
-        if FileTest.exist?("#{@filename}.#{i}")
-          File.rename("#{@filename}.#{i}", "#{@filename}.#{i+1}")
+    def shift_log_age(shift_age)
+      postfix = Time.now.strftime("%Y%m%d")
+      (shift_age-3).downto(0) do |i|
+        if FileTest.exist?("#{@filename}.#{i}.#{postfix}")
+          File.rename("#{@filename}.#{i}.#{postfix}", "#{@filename}.#{i+1}.#{postfix}")
         end
       end
       @dev.close rescue nil
-      File.rename("#{@filename}", "#{@filename}.0")
+      File.rename("#{@filename}", "#{@filename}.0.#{postfix}")
       @dev = create_logfile(@filename)
       return true
     end
@@ -659,7 +665,7 @@ private
       when /^monthly$/
         eod(now - now.mday * SiD)
       else
-        now
+        eod(now - 1 * SiD)
       end
     end
 
